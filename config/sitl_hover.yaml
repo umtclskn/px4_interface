@@ -1,0 +1,19 @@
+offboard_hover_node:
+  ros__parameters:
+    hover_duration_s: 10.0
+    px4_ready_timeout_s: 30.0
+    prestream_duration_s: 1.0
+    prestream_timeout_s: 10.0
+    offboard_timeout_s: 10.0
+    arm_timeout_s: 10.0
+    landing_timeout_s: 30.0
+    takeoff_height_m: 1.0
+    relative_offset_x_m: 0.0
+    relative_offset_y_m: 0.0
+    position_tolerance_m: 0.15
+    target_reach_timeout_s: 45.0
+    use_relative_target: true
+    target_x: 0.0
+    target_y: 0.0
+    target_z: -2.0
+    target_yaw: 0.0
