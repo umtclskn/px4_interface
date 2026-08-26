@@ -38,7 +38,7 @@ HOVER still starts at ARMED + OFFBOARD, but `hover_duration_s` does **not**. The
 ## Run (after PX4 SITL + MicroXRCEAgent)
 
 ```bash
-cd ~/portfolio_ws/drone_ws
+cd  /{ros2_ws}/ # your ros 2 workspace
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ros2 launch px4_interface sitl_hover.launch.py \

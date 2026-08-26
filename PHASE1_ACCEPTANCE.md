@@ -78,7 +78,7 @@ Target-reached:
 Workspace overlay (operator-run; not executed as part of this documentation task):
 
 ```bash
-cd ~/portfolio_ws/drone_ws
+cd ~/{ros2_ws}/ #your ros 2 workspace 
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```

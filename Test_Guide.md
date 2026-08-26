@@ -107,7 +107,7 @@ Open a third terminal:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/portfolio_ws/drone_ws/install/setup.bash
+source ~/{ros2_ws}/install/setup.bash
 ```
 
 Verify that no old controller process is still running:
@@ -136,7 +136,7 @@ Open a fourth terminal before launching the controller:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/portfolio_ws/drone_ws/install/setup.bash
+source ~/{ros2_ws}/install/setup.bash
 
 ros2 topic echo /fmu/out/vehicle_odometry --field position \
   --qos-reliability best_effort \
@@ -164,7 +164,7 @@ Open a fifth terminal before launching the controller:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/portfolio_ws/drone_ws/install/setup.bash
+source ~/{ros2_ws}/install/setup.bash
 
 ros2 topic echo /fmu/out/vehicle_status_v4 \
   --qos-reliability best_effort \
@@ -196,7 +196,7 @@ Open a sixth terminal and source the ROS overlays:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
-source ~/portfolio_ws/drone_ws/install/setup.bash
+source ~/{ros2_ws}/install/setup.bash
 ```
 
 Launch exactly one controller:
