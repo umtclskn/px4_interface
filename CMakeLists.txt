@@ -6,13 +6,17 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(px4_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 add_library(px4_interface_core
   src/frame_conversions.cpp
@@ -36,12 +40,30 @@ ament_target_dependencies(offboard_hover_node
   px4_msgs
 )
 
+add_executable(goal_follower_node
+  src/goal_follower_main.cpp
+  src/goal_follower_node.cpp
+)
+target_include_directories(goal_follower_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(goal_follower_node px4_interface_core)
+ament_target_dependencies(goal_follower_node
+  rclcpp
+  px4_msgs
+  geometry_msgs
+  nav_msgs
+  std_srvs
+  tf2_ros
+)
+
 install(TARGETS px4_interface_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
-install(TARGETS offboard_hover_node
+install(TARGETS offboard_hover_node goal_follower_node
   DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY include/
@@ -55,6 +77,7 @@ install(DIRECTORY launch config
 install(PROGRAMS
   scripts/teleop/velocity_control.py
   scripts/teleop/keyboard_teleop.py
+  scripts/test/publish_test_path.py
   DESTINATION lib/${PROJECT_NAME}
 )
 install(CODE "
@@ -72,6 +95,17 @@ if(BUILD_TESTING)
   target_link_libraries(test_frame_conversions px4_interface_core)
   ament_add_gtest(test_path_tracker test/test_path_tracker.cpp)
   target_link_libraries(test_path_tracker px4_interface_core)
+  ament_add_gtest(test_goal_follower_construct test/test_goal_follower_construct.cpp)
+  target_link_libraries(test_goal_follower_construct px4_interface_core)
+  ament_target_dependencies(test_goal_follower_construct
+    rclcpp
+    px4_msgs
+    geometry_msgs
+    nav_msgs
+    std_srvs
+    tf2_ros
+  )
+  target_sources(test_goal_follower_construct PRIVATE src/goal_follower_node.cpp)
 endif()
 
 ament_package()

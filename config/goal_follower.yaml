@@ -1,0 +1,20 @@
+goal_follower_node:
+  ros__parameters:
+    world_frame: world
+    body_frame: body
+    world_yaw_offset_rad: 0.0
+    takeoff_height_m: 1.5
+    lookahead_m: 1.0
+    position_tolerance_m: 0.2
+    path_timeout_s: 3.0
+    max_start_distance_m: 3.0
+    max_horizontal_distance_m: 50.0
+    min_altitude_m: 0.5
+    max_altitude_m: 5.0
+    yaw_mode: hold
+    px4_ready_timeout_s: 30.0
+    prestream_duration_s: 1.0
+    prestream_timeout_s: 10.0
+    offboard_timeout_s: 10.0
+    arm_timeout_s: 10.0
+    landing_timeout_s: 30.0

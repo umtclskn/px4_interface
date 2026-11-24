@@ -60,6 +60,26 @@ ros2 launch px4_interface sitl_hover.launch.py \
 - Success is `DONE` after `ARMING_STATE_DISARMED` following a land.
 - `ABORTED_DISARMED` and `FAILED_LANDING` are failure terminals (no force-disarm).
 
+## Goal follower (`goal_follower_node`)
+
+Follows `nav_msgs/Path` from the exploration core (world ENU) by streaming PX4
+position setpoints at a lookahead point. Locks a one-shot world↔NED alignment
+from TF + `VehicleOdometry`, takes off to `takeoff_height_m`, then
+`FOLLOW`/`HOLD`. Landing: `ros2 service call /goal_follower_node/land std_srvs/srv/Trigger`.
+
+Do **not** run alongside `offboard_hover_node` or velocity teleop (single
+publisher on `/fmu/in/*`).
+
+```bash
+ros2 launch px4_interface goal_follower.launch.py
+# axis-mapping helper (1 Hz straight path from current body pose):
+ros2 run px4_interface publish_test_path.py --axis x --length 2
+```
+
+With position-only setpoints, cruise speed is roughly PX4 `MPC_XY_P` ×
+`lookahead_m` (measure in the acceptance run; do not claim a fixed speed).
+Manual SITL checklist: [GOAL_FOLLOWER_ACCEPTANCE.md](GOAL_FOLLOWER_ACCEPTANCE.md).
+
 ## Velocity keyboard teleop
 
 SITL keyboard velocity teleop (do **not** run alongside `offboard_hover_node`):
