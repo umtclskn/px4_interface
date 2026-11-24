@@ -6,7 +6,7 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_ID MATCHES "Clang")
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
@@ -36,5 +36,20 @@ install(DIRECTORY include/
 install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
+
+# Keyboard velocity teleop (Python). Names match ros2 run entry points.
+install(PROGRAMS
+  scripts/teleop/velocity_control.py
+  scripts/teleop/keyboard_teleop.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(CODE "
+  execute_process(COMMAND \"${CMAKE_COMMAND}\" -E create_symlink
+    velocity_control.py
+    \"\${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/velocity_teleop_bridge\")
+  execute_process(COMMAND \"${CMAKE_COMMAND}\" -E create_symlink
+    keyboard_teleop.py
+    \"\${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/velocity_teleop_keyboard\")
+")
 
 ament_package()

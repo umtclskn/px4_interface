@@ -59,3 +59,15 @@ ros2 launch px4_interface sitl_hover.launch.py \
 - Out: `/fmu/out/vehicle_status_v4`, `/fmu/out/vehicle_odometry`
 - Success is `DONE` after `ARMING_STATE_DISARMED` following a land.
 - `ABORTED_DISARMED` and `FAILED_LANDING` are failure terminals (no force-disarm).
+
+## Velocity keyboard teleop
+
+SITL keyboard velocity teleop (do **not** run alongside `offboard_hover_node`):
+
+```bash
+ros2 run px4_interface velocity_teleop_bridge
+# separate raw-TTY terminal:
+ros2 run px4_interface velocity_teleop_keyboard
+```
+
+Topics: `/offboard_velocity_cmd`, `/arm_message` → `/fmu/in/*`.
