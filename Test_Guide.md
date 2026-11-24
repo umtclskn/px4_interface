@@ -47,44 +47,38 @@ Before starting:
 - The drone must begin on the ground, disarmed, with motors stopped.
 - Do not run the old Python `px4_offboard` mission or another offboard controller during this test.
 
-## Terminal 1 — Isaac Sim and Pegasus
+## Terminal 1 — Isaac Sim + Pegasus + PX4
 
-Open a new terminal and start Isaac Sim with the Pegasus extension folder.
+Use the saved warehouse USD via `launch_drone_with_px4.py` (preferred). This loads
+the stage with ROS 2 bridge, Pegasus, and PX4 SITL already wired; do not rebuild
+the scene from the Pegasus panel unless that script is unavailable.
+
+If Isaac logs many `Failed to create change watch ... errno=28/No space left on
+device` errors and the viewport stays black, the Linux **inotify watch limit**
+is exhausted (disk space can still be free). Raise it permanently:
 
 ```bash
-export ISAACSIM_PATH="/home/umut/Desktop/isaac-sim"
-export ISAACSIM="$ISAACSIM_PATH/isaac-sim.sh"
-export PEGASUS_REPO="$HOME/PegasusSimulator"
-
-"$ISAACSIM" --ext-folder "$PEGASUS_REPO/extensions"
+echo -e 'fs.inotify.max_user_watches=1048576\nfs.inotify.max_user_instances=1024' | sudo tee /etc/sysctl.d/99-inotify-isaac.conf
+sudo sysctl --system
 ```
 
-After the Isaac Sim GUI opens:
+Then fully quit Isaac and relaunch.
 
-1. Open the Pegasus Simulator extension or panel.
-2. Select the PX4 backend.
-3. Enable PX4 auto-launch if that is the established project configuration.
-4. Confirm the PX4 path is:
-
-```text
-/home/umut/PX4-Autopilot
+```bash
+cd /home/umut/portfolio_ws/drone_exploration_ws/src
+unset PYTHONPATH AMENT_PREFIX_PATH COLCON_PREFIX_PATH
+export ROS_DISTRO=jazzy
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/home/umut/Desktop/isaac-sim/exts/isaacsim.ros2.bridge/jazzy/lib"
+/home/umut/Desktop/isaac-sim/python.sh launch_drone_with_px4.py
 ```
 
-5. Load the default environment using **Load Scene**.
-6. Select the Iris vehicle.
-7. Set Vehicle ID to `0`.
-8. Set the initial spawn position to:
+Expected during startup: `Could not import system rclpy` then `rclpy loaded`
+(Isaac’s internal Jazzy bridge). Wait until the GUI shows the warehouse scene
+and the drone on the ground.
 
-```text
-x = 0.0
-y = 0.0
-z = 0.5
-```
-
-9. Select **Load Vehicle**.
-10. Press **Play** once to start the simulation.
-
-Leave Isaac Sim running. At this point, the drone should be on the ground, disarmed, and not spinning its motors.
+Leave Isaac Sim running. At this point, the drone should be on the ground,
+disarmed, and not spinning its motors.
 
 Do not start the ROS controller in this terminal.
 
