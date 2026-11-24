@@ -64,8 +64,7 @@ GoalFollowerNode::GoalFollowerNode(const rclcpp::NodeOptions & options)
 : Node("goal_follower_node", options),
   state_entered_(now()),
   last_command_sent_(now()),
-  landing_started_(now()),
-  last_path_stamp_(now())
+  landing_started_(now())
 {
   world_frame_ = declare_parameter("world_frame", "world");
   body_frame_ = declare_parameter("body_frame", "body");
@@ -189,18 +188,27 @@ void GoalFollowerNode::onLand(
   RCLCPP_INFO(get_logger(), "Land service requested");
 }
 
+void GoalFollowerNode::injectAcceptedPathForTest(
+  const std::vector<Vec3> & path_ned, const double now_s)
+{
+  path_tracker_.setPath(path_ned);
+  applyPathUpdate(active_path_, PathUpdateKind::kAccepted, now_s);
+}
+
 void GoalFollowerNode::onPath(const nav_msgs::msg::Path::SharedPtr msg)
 {
+  const double now_s = now().seconds();
   if (msg->header.frame_id != world_frame_) {
-    ++path_reject_count_;
+    applyPathUpdate(active_path_, PathUpdateKind::kRejected, now_s);
     RCLCPP_WARN_THROTTLE(
       get_logger(), *get_clock(), 2000,
       "path rejected: frame_id='%s' != world_frame='%s' (rejects=%zu)",
-      msg->header.frame_id.c_str(), world_frame_.c_str(), path_reject_count_);
+      msg->header.frame_id.c_str(), world_frame_.c_str(),
+      active_path_.reject_count);
     return;
   }
   if (msg->poses.size() > path_limits_.max_points) {
-    ++path_reject_count_;
+    applyPathUpdate(active_path_, PathUpdateKind::kRejected, now_s);
     RCLCPP_WARN_THROTTLE(
       get_logger(), *get_clock(), 2000,
       "path rejected: too many points (%zu > %zu)",
@@ -210,14 +218,14 @@ void GoalFollowerNode::onPath(const nav_msgs::msg::Path::SharedPtr msg)
 
   if (msg->poses.empty()) {
     path_tracker_.clear();
-    last_path_stamp_ = now();
+    applyPathUpdate(active_path_, PathUpdateKind::kEmpty, now_s);
     RCLCPP_INFO_THROTTLE(
       get_logger(), *get_clock(), 2000, "empty path accepted -> hold");
     return;
   }
 
   if (!alignment_locked_ || !odometryNedValid()) {
-    ++path_reject_count_;
+    applyPathUpdate(active_path_, PathUpdateKind::kRejected, now_s);
     RCLCPP_WARN_THROTTLE(
       get_logger(), *get_clock(), 2000,
       "path rejected: alignment/odometry not ready");
@@ -233,7 +241,7 @@ void GoalFollowerNode::onPath(const nav_msgs::msg::Path::SharedPtr msg)
     world.z = pose.pose.position.z;
     const auto ned = worldToNed(world, alignment_);
     if (!ned.has_value()) {
-      ++path_reject_count_;
+      applyPathUpdate(active_path_, PathUpdateKind::kRejected, now_s);
       RCLCPP_WARN_THROTTLE(
         get_logger(), *get_clock(), 2000,
         "path rejected: worldToNed failed (non-finite)");
@@ -245,16 +253,16 @@ void GoalFollowerNode::onPath(const nav_msgs::msg::Path::SharedPtr msg)
   const PathRejection rejection = validatePathNed(
     path_ned, vehicleNed(), alignment_.ned_home, path_limits_);
   if (rejection != PathRejection::kNone) {
-    ++path_reject_count_;
+    applyPathUpdate(active_path_, PathUpdateKind::kRejected, now_s);
     RCLCPP_WARN_THROTTLE(
       get_logger(), *get_clock(), 2000,
       "path rejected: %s (rejects=%zu)",
-      pathRejectionName(rejection), path_reject_count_);
+      pathRejectionName(rejection), active_path_.reject_count);
     return;
   }
 
   path_tracker_.setPath(path_ned);
-  last_path_stamp_ = now();
+  applyPathUpdate(active_path_, PathUpdateKind::kAccepted, now_s);
 }
 
 bool GoalFollowerNode::odometryNedValid() const
@@ -300,10 +308,19 @@ bool GoalFollowerNode::withinTolerance(const Vec3 & target_ned) const
 
 bool GoalFollowerNode::pathUsable(const rclcpp::Time & t) const
 {
-  if (!path_tracker_.hasPath()) {
+  if (!active_path_.has_path || !path_tracker_.hasPath()) {
     return false;
   }
-  return elapsedSeconds(last_path_stamp_, t) <= path_timeout_s_;
+  if (!(path_timeout_s_ > 0.0) || !std::isfinite(path_timeout_s_)) {
+    return false;
+  }
+  const double now_s = t.seconds();
+  if (!std::isfinite(now_s) || !std::isfinite(active_path_.received_s) ||
+    now_s < active_path_.received_s)
+  {
+    return false;
+  }
+  return (now_s - active_path_.received_s) <= path_timeout_s_;
 }
 
 bool GoalFollowerNode::tryCaptureAlignment()
@@ -356,16 +373,12 @@ bool GoalFollowerNode::tryCaptureAlignment()
 void GoalFollowerNode::enterHold(const std::string & reason)
 {
   if (state_ != GoalFollowerState::kHold) {
-    hold_ned_ = vehicleNed();
-    hold_latched_ = true;
-    setpoint_ned_ = hold_ned_;
     transitionTo(GoalFollowerState::kHold, reason);
   }
 }
 
 void GoalFollowerNode::enterFollow(const std::string & reason)
 {
-  hold_latched_ = false;
   if (state_ != GoalFollowerState::kFollow) {
     transitionTo(GoalFollowerState::kFollow, reason);
   }
@@ -388,6 +401,74 @@ void GoalFollowerNode::updateFollowHold(const rclcpp::Time & t)
       enterHold("takeoff complete, no path");
     }
   }
+}
+
+void GoalFollowerNode::publishOffboardModeOnly()
+{
+  // Offboard proof of life only: no TrajectorySetpoint this tick. PX4 keeps
+  // the last received setpoint (OffboardControlMode continues); offboard-loss
+  // failsafe does not trigger.
+  if (!alignment_locked_) {
+    return;
+  }
+  publishOffboardControlMode();
+}
+
+void GoalFollowerNode::applyFollowHoldSetpoints(const rclcpp::Time & t)
+{
+  const bool pose_valid = odometryNedValid();
+  const Vec3 pose = vehicleNed();
+
+  LookaheadResult look;
+  look.valid = false;
+  if (active_path_.has_path && path_tracker_.hasPath()) {
+    look = path_tracker_.update(pose, lookahead_m_);
+  }
+
+  FollowDecisionInput input;
+  input.now_s = t.seconds();
+  input.path = active_path_;
+  input.path_timeout_s = path_timeout_s_;
+  input.pose_valid = pose_valid;
+  input.pose_position = pose;
+  input.tracker_setpoint_valid = look.valid;
+  input.tracker_setpoint = look.target;
+
+  const FollowDecision decision = decideFollowOrHold(input, hold_latch_);
+
+  if (decision.kind == FollowDecisionKind::kFollow) {
+    enterFollow(decision.detail);
+    setpoint_ned_ = decision.setpoint;
+    if (!publishStreamingSetpoints(setpoint_ned_)) {
+      enterHold("non-finite setpoint");
+      publishOffboardModeOnly();
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "follow setpoint publish failed (%s)", decision.detail.c_str());
+    }
+    return;
+  }
+
+  if (decision.kind == FollowDecisionKind::kHold) {
+    enterHold(decision.detail);
+    setpoint_ned_ = decision.setpoint;
+    if (!publishStreamingSetpoints(setpoint_ned_)) {
+      publishOffboardModeOnly();
+      RCLCPP_ERROR_THROTTLE(
+        get_logger(), *get_clock(), 2000,
+        "hold setpoint publish failed (%s)", decision.detail.c_str());
+    }
+    return;
+  }
+
+  // kNoSetpoint: skip TrajectorySetpoint; OffboardControlMode continues so
+  // PX4 keeps the last received setpoint (see publishOffboardModeOnly).
+  enterHold(decision.detail);
+  publishOffboardModeOnly();
+  RCLCPP_ERROR_THROTTLE(
+    get_logger(), *get_clock(), 2000,
+    "no trajectory setpoint this tick (%s); offboard mode only",
+    decision.detail.c_str());
 }
 
 void GoalFollowerNode::timerCallback()
@@ -513,27 +594,11 @@ void GoalFollowerNode::timerCallback()
           if (withinTolerance(setpoint_ned_)) {
             updateFollowHold(t);
           }
-        } else {
-          updateFollowHold(t);
-          if (state_ == GoalFollowerState::kFollow) {
-            const LookaheadResult look =
-              path_tracker_.update(vehicleNed(), lookahead_m_);
-            if (!look.valid) {
-              enterHold("path tracker invalid");
-            } else {
-              setpoint_ned_ = look.target;
-            }
-          } else if (state_ == GoalFollowerState::kHold) {
-            if (!hold_latched_) {
-              hold_ned_ = vehicleNed();
-              hold_latched_ = true;
-            }
-            setpoint_ned_ = hold_ned_;
+          if (!publishStreamingSetpoints(setpoint_ned_)) {
+            enterHold("non-finite setpoint");
           }
-        }
-
-        if (!publishStreamingSetpoints(setpoint_ned_)) {
-          enterHold("non-finite setpoint");
+        } else {
+          applyFollowHoldSetpoints(t);
         }
       }
       break;

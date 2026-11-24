@@ -20,6 +20,7 @@
 #include <px4_msgs/msg/vehicle_status.hpp>
 
 #include "px4_interface/frame_conversions.hpp"
+#include "px4_interface/path_hold_policy.hpp"
 #include "px4_interface/path_tracker.hpp"
 
 namespace px4_interface
@@ -50,6 +51,19 @@ public:
 
   GoalFollowerState state() const noexcept {return state_;}
 
+  /// Test helper: path rejection counter (ActivePathState.reject_count).
+  std::size_t pathRejectCount() const noexcept
+  {
+    return active_path_.reject_count;
+  }
+
+  /// Test helper: whether an accepted non-empty path is active.
+  bool hasActivePath() const noexcept {return active_path_.has_path;}
+
+  /// Test helper: seed an accepted NED path without PX4/TF (unit tests).
+  void injectAcceptedPathForTest(
+    const std::vector<Vec3> & path_ned, double now_s);
+
 private:
   void timerCallback();
   void onVehicleStatus(const px4_msgs::msg::VehicleStatus::SharedPtr msg);
@@ -63,6 +77,7 @@ private:
   bool publishTrajectorySetpoint(const Vec3 & target_ned);
   void publishVehicleCommand(uint32_t command, float param1, float param2);
   bool publishStreamingSetpoints(const Vec3 & target_ned);
+  void publishOffboardModeOnly();
 
   bool tryCaptureAlignment();
   bool odometryNedValid() const;
@@ -73,6 +88,7 @@ private:
   void enterHold(const std::string & reason);
   void enterFollow(const std::string & reason);
   void updateFollowHold(const rclcpp::Time & t);
+  void applyFollowHoldSetpoints(const rclcpp::Time & t);
 
   void requestOffboardMode();
   void requestArm();
@@ -118,22 +134,20 @@ private:
   rclcpp::Time state_entered_;
   rclcpp::Time last_command_sent_;
   rclcpp::Time landing_started_;
-  rclcpp::Time last_path_stamp_;
   bool command_sent_in_state_{false};
   bool land_requested_{false};
   bool alignment_locked_{false};
-  bool hold_latched_{false};
 
   WorldNedAlignment alignment_{};
   PathTracker path_tracker_;
   PathLimits path_limits_{};
-  Vec3 hold_ned_{};
+  ActivePathState active_path_{};
+  HoldLatch hold_latch_{};
   Vec3 setpoint_ned_{};
   float hold_yaw_ned_{0.0f};
 
   uint8_t target_system_{1};
   uint8_t target_component_{1};
-  std::size_t path_reject_count_{0};
 
   std::string world_frame_{"world"};
   std::string body_frame_{"body"};

@@ -21,6 +21,7 @@ find_package(tf2_ros REQUIRED)
 add_library(px4_interface_core
   src/frame_conversions.cpp
   src/path_tracker.cpp
+  src/path_hold_policy.cpp
 )
 target_include_directories(px4_interface_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -95,6 +96,8 @@ if(BUILD_TESTING)
   target_link_libraries(test_frame_conversions px4_interface_core)
   ament_add_gtest(test_path_tracker test/test_path_tracker.cpp)
   target_link_libraries(test_path_tracker px4_interface_core)
+  ament_add_gtest(test_path_hold_policy test/test_path_hold_policy.cpp)
+  target_link_libraries(test_path_hold_policy px4_interface_core)
   ament_add_gtest(test_goal_follower_construct test/test_goal_follower_construct.cpp)
   target_link_libraries(test_goal_follower_construct px4_interface_core)
   ament_target_dependencies(test_goal_follower_construct
@@ -106,6 +109,17 @@ if(BUILD_TESTING)
     tf2_ros
   )
   target_sources(test_goal_follower_construct PRIVATE src/goal_follower_node.cpp)
+  ament_add_gtest(test_goal_follower_path_input test/test_goal_follower_path_input.cpp)
+  target_link_libraries(test_goal_follower_path_input px4_interface_core)
+  ament_target_dependencies(test_goal_follower_path_input
+    rclcpp
+    px4_msgs
+    geometry_msgs
+    nav_msgs
+    std_srvs
+    tf2_ros
+  )
+  target_sources(test_goal_follower_path_input PRIVATE src/goal_follower_node.cpp)
 endif()
 
 ament_package()
