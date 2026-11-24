@@ -14,6 +14,15 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(px4_msgs REQUIRED)
 
+add_library(px4_interface_core
+  src/frame_conversions.cpp
+  src/path_tracker.cpp
+)
+target_include_directories(px4_interface_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 add_executable(offboard_hover_node
   src/offboard_hover_main.cpp
   src/offboard_hover_node.cpp
@@ -27,6 +36,11 @@ ament_target_dependencies(offboard_hover_node
   px4_msgs
 )
 
+install(TARGETS px4_interface_core
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
 install(TARGETS offboard_hover_node
   DESTINATION lib/${PROJECT_NAME}
 )
@@ -51,5 +65,13 @@ install(CODE "
     keyboard_teleop.py
     \"\${CMAKE_INSTALL_PREFIX}/lib/${PROJECT_NAME}/velocity_teleop_keyboard\")
 ")
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_frame_conversions test/test_frame_conversions.cpp)
+  target_link_libraries(test_frame_conversions px4_interface_core)
+  ament_add_gtest(test_path_tracker test/test_path_tracker.cpp)
+  target_link_libraries(test_path_tracker px4_interface_core)
+endif()
 
 ament_package()
